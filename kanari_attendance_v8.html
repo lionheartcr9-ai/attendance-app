@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ألوان الكناري للصناعات الغذائية HR — نظام المطابقة</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-populate/browser/xlsx-populate.min.js"></script>
+  <style>
+    :root { --bg:#ffffff; --fg:#1f2937; --muted:#6b7280; --b:#e5e7eb; --ok:#16a34a; --bad:#dc2626; --chip:#f3f4f6; --brand:#b91c1c; }
+    body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial;}
+    .container{max-width:1100px;margin:0 auto;padding:16px;}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .title{font-size:clamp(18px,3.2vw,28px);color:var(--brand);margin:0;text-align:right}
+    .btn{background:var(--brand);color:#fff;border:none;border-radius:22px;padding:10px 14px;cursor:pointer}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .card{border:1px solid var(--b);border-radius:16px;padding:16px;margin-bottom:12px;}
+    .row{display:grid;grid-template-columns:1fr;gap:12px;}
+    @media (min-width: 768px){ .row{grid-template-columns:1fr 1fr;} }
+    h2{font-size:18px;margin:0 0 6px 0;color:#374151;}
+    .hint{font-size:12px;color:var(--muted);}
+    .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+    .stat{border:1px solid var(--b);border-radius:16px;padding:12px;background:#f9fafb;cursor:pointer;transition:.15s}
+    .stat.active{outline:2px solid var(--brand)}
+    .stat .label{font-size:12px;color:var(--muted);}
+    .stat .value{font-weight:700;font-size:22px;}
+    .ok{color:var(--ok);} .bad{color:var(--bad);}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    .pill{background:var(--chip);border-radius:999px;padding:4px 10px;font-size:12px;border:1px solid var(--b);}
+    .input{padding:10px 12px;border:1px solid var(--b);border-radius:12px;min-width:220px;}
+    table{width:100%;border-collapse:collapse;}
+    thead{background:#f3f4f6;}
+    th,td{padding:8px 10px;border-bottom:1px solid var(--b);text-align:right;white-space:nowrap;}
+    .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid;}
+    .badge.ok{background:#dcfce7;color:#166534;border-color:#bbf7d0;}
+    .badge.bad{background:#fee2e2;color:#991b1b;border-color:#fecaca;}
+    .badge.neutral{background:#f3f4f6;color:#4b5563;border-color:#e5e7eb;}
+    .drop{border:2px dashed var(--b);border-radius:12px;height:140px;display:flex;gap:6px;align-items:center;justify-content:center;cursor:pointer;margin-top:10px}
+    .drop:hover{background:#f9fafb}
+    footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center;line-height:1.6}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1 class="title">ألوان الكناري للصناعات الغذائية HR — نظام المطابقة</h1>
+      <button id="dl" class="btn" disabled>💾 تنزيل النتائج XLSX</button>
+    </header>
+
+    <div class="row">
+      <div class="card">
+        <h2>ملف البصمة (Biometric)</h2>
+        <div class="hint">Excel/CSV — أعمدة: الكود، الاسم، الحالة</div>
+        <input id="bioFile" type="file" style="display:none"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv">
+        <div id="bioDrop" class="drop">📂 اسحب الملف هنا أو اضغط للاختيار</div>
+        <div class="hint">الحالة: <span id="bioName">لم يتم اختيار ملف</span> — <span id="bioCount">0</span> صف</div>
+      </div>
+      <div class="card">
+        <h2>الكشف اليدوي (Manual)</h2>
+        <div class="hint">Excel/CSV — أعمدة: الكود، الاسم، الحالة</div>
+        <input id="manFile" type="file" style="display:none"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv">
+        <div id="manDrop" class="drop">📂 اسحب الملف هنا أو اضغط للاختيار</div>
+        <div class="hint">الحالة: <span id="manName">لم يتم اختيار ملف</span> — <span id="manCount">0</span> صف</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stats">
+        <div class="stat" data-filter="مطابق"><div class="label ok">مطابق</div><div id="ok" class="value ok">0</div></div>
+        <div class="stat" data-filter="مخالف"><div class="label bad">مخالف</div><div id="bad" class="value bad">0</div></div>
+        <div class="stat" data-filter="ناقص"><div class="label">ناقص/غير مكتمل</div><div id="empty" class="value">0</div></div>
+      </div>
+      <div class="actions" style="margin-top:12px">
+        <input id="q" class="input" placeholder="🔍 بحث بالاسم أو الكود" />
+        <span class="hint">عدد الصفوف: <b id="rowsCount">0</b></span>
+        <span class="pill">المطابقة تشترط تطابق <b>الكود والاسم</b> ثم مقارنة الحالة</span>
+      </div>
+    </div>
+
+    <div class="card" style="overflow:auto">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>الكود — البصمة</th>
+            <th>الاسم — البصمة</th>
+            <th>الحالة — البصمة</th>
+            <th>الكود — اليدوي</th>
+            <th>الاسم — اليدوي</th>
+            <th>الحالة — اليدوي</th>
+            <th>نتيجة المطابقة</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <footer>
+      ألوان الكناري للصناعات الغذائية © 2025 — نظام المطابقة الذكي للموارد البشرية<br/>
+      إعداد المهندس/ حمدي العريقي — ت: 773143600 — جميع الحقوق محفوظة نوفمبر 2025م
+    </footer>
+  </div>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+
+    const normalize = s => { if (!s) return ""; const t = String(s).trim().replace(/\s+/g," ").replace(/[\u200f\u200e]/g,"").toLowerCase(); return t.replace(/\u0649/g,"ي").replace(/\u0629/g,"ه").replace(/\u06cc/g,"ي").replace(/\u06a9/g,"ك"); };
+    const normalizeStatus = s => { const t = normalize(s).replace(/[^\u0621-\u064Aa-z0-9\s]/gi,"").trim(); if (["حضور","دوام","present"].some(x=>t.includes(x))) return "حضور"; if (["غياب","absent"].some(x=>t.includes(x))) return "غياب"; if (["نصف دوام","نصف","half","0.5"].some(x=>t.includes(x))) return "نصف دوام"; return s||""; };
+
+    const readSheet = file => new Promise((resolve,reject)=>{ const reader = new FileReader(); reader.onload = e => { try { const data = new Uint8Array(e.target.result); const wb = XLSX.read(data, { type:'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; const json = XLSX.utils.sheet_to_json(ws, { defval:'' }); const rows=[]; const lowerKeys=o=>{const out={}; for(const k of Object.keys(o)) out[normalize(k)]=o[k]; return out;}; const keyMap={code:["الكود","code","رقم الكود","id","emp code","number"], name:["الاسم","name","employee","emp name"], status:["الحاله","الحالة","status","presence","att","attendance"]}; for (const row of json){ const r=lowerKeys(row); const findCol=alts=>{ for(const a of alts){ const n=normalize(a); const key=Object.keys(r).find(k=>k.includes(n)); if(key) return r[key]; } return ''; }; const code=String(findCol(keyMap.code)).trim(); const name=String(findCol(keyMap.name)).trim(); const status=String(findCol(keyMap.status)).trim(); if(!code&&!name&&!status) continue; rows.push({code,name,status}); } resolve(rows); } catch(err){ reject(err); } }; reader.onerror=reject; reader.readAsArrayBuffer(file); });
+
+    const toMap = rows => { const map=new Map(); for(const r of rows||[]){ const key=normalize(r.code); if(key) map.set(key,r); } return map; };
+
+    let bioRows=[], manRows=[], allRows=[], filterStatus='الكل';
+
+    const compare = () => {
+      const bioMap=toMap(bioRows), manMap=toMap(manRows);
+      const codes=new Set([...bioMap.keys(),...manMap.keys()]);
+      const res=[];
+      for(const key of codes){
+        const b=bioMap.get(key), m=manMap.get(key);
+        const bS=normalizeStatus(b?.status||''), mS=normalizeStatus(m?.status||'');
+        const nameMatch=(normalize(b?.name||'')&&normalize(m?.name||''))?(normalize(b?.name||'')===normalize(m?.name||'')):false;
+        let verdict='';
+        if(b&&m){
+          if(nameMatch) verdict=(bS&&mS)?(bS===mS?'مطابق':'مخالف'):'غير محدد';
+          else verdict='مخالف';
+        } else verdict='غير محدد';
+        res.push({
+          bioCode:b?.code||'', bioName:b?.name||'', bioStatus:bS||b?.status||'',
+          manCode:m?.code||'', manName:m?.name||'', manStatus:mS||m?.status||'',
+          match:verdict
+        });
+      }
+      res.sort((a,b)=>normalize(a.bioCode).localeCompare(normalize(b.bioCode),'ar'));
+      allRows=res; render();
+    };
+
+    const render = () => {
+      const q=normalize($('#q').value||'');
+      let rows=allRows;
+      if(q) rows=rows.filter(r=> normalize(r.bioCode).includes(q)||normalize(r.bioName).includes(q)||normalize(r.manCode).includes(q)||normalize(r.manName).includes(q));
+      if(filterStatus==='مطابق') rows=rows.filter(r=>r.match==='مطابق');
+      else if(filterStatus==='مخالف') rows=rows.filter(r=>r.match==='مخالف');
+      else if(filterStatus==='ناقص') rows=rows.filter(r=>r.match==='غير محدد');
+
+      $('#rowsCount').textContent = rows.length;
+      $('#ok').textContent=allRows.filter(r=>r.match==='مطابق').length;
+      $('#bad').textContent=allRows.filter(r=>r.match==='مخالف').length;
+      $('#empty').textContent=allRows.filter(r=>!r.match||r.match==='غير محدد').length;
+
+      document.querySelectorAll('.stat').forEach(s=>s.classList.remove('active'));
+      document.querySelectorAll('.stat').forEach(s=> s.classList.toggle('active', s.getAttribute('data-filter')===filterStatus));
+      if(filterStatus==='الكل') document.querySelectorAll('.stat').forEach(s=>s.classList.remove('active'));
+
+      const tbody=document.querySelector('#tbl tbody'); tbody.innerHTML='';
+      for(const r of rows){
+        const tr=document.createElement('tr');
+        const cells=[
+          r.bioCode, r.bioName, r.bioStatus, r.manCode, r.manName, r.manStatus,
+          r.match?('<span class="badge '+(r.match==='مطابق'?'ok':(r.match==='مخالف'?'bad':'neutral'))+'">'+r.match+'</span>'):'<span class="badge neutral">غير محدد</span>'
+        ];
+        for(const c of cells){ const td=document.createElement('td'); td.innerHTML=c; tr.appendChild(td);}
+        tbody.appendChild(tr);
+      }
+      document.getElementById('dl').disabled=!allRows.length;
+    };
+
+    async function buildXLSX() {
+      if(!allRows.length){ alert('حمّل ملفي البصمة واليدوي أولًا.'); return; }
+      const dataRows = allRows.map(r=>[
+        r.bioCode, r.bioName, r.bioStatus, r.manCode, r.manName, r.manStatus, r.match||'غير محدد'
+      ]);
+      const headers = ['الكود — البصمة','الاسم — البصمة','الحالة — البصمة','الكود — اليدوي','الاسم — اليدوي','الحالة — اليدوي','نتيجة المطابقة'];
+
+      const wb = await XlsxPopulate.fromBlankAsync();
+      const sheet = wb.sheet(0).name('المقارنة');
+      sheet.row(1).style({ bold:true, horizontalAlignment:'center' });
+      headers.forEach((h,i)=>sheet.cell(1,i+1).value(h));
+      dataRows.forEach((row,r)=>{
+        row.forEach((val,c)=>{
+          const cell = sheet.cell(r+2, c+1).value(val).style({ horizontalAlignment:'center' });
+          if(c===6){ const v = String(val||'').trim();
+            if(v==='مطابق') cell.style({ fill:'C6EFCE' });
+            else if(v==='مخالف') cell.style({ fill:'FFC7CE' });
+            else cell.style({ fill:'E5E7EB' });
+          }
+        });
+      });
+      [16,24,14,16,24,14,18].forEach((w,i)=>sheet.column(i+1).width(w));
+      sheet.freezePanes(2,1);
+      const blob = await wb.outputAsync('blob');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'kanari_attendance_final.xlsx';
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+    }
+
+    // Wiring: single clickable drop zone per section
+    function wire(zoneId, inputId, onRows){
+      const zone = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+      zone.addEventListener('click', ()=> input.click());
+      ['dragover','dragenter'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault(); zone.style.background='#f3f4f6';}));
+      ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault(); zone.style.background='';}));
+      zone.addEventListener('drop', e=>{const f = e.dataTransfer.files?.[0]; if(f) handleFile(f);});
+      input.addEventListener('change', ()=>{ const f=input.files?.[0]; if(f) handleFile(f); });
+      async function handleFile(f){
+        const rows = await readSheet(f); onRows(rows, f.name);
+      }
+    }
+
+    wire('bioDrop','bioFile',(rows,name)=>{ bioRows=rows; $('#bioName').textContent=name; $('#bioCount').textContent=rows.length; compare(); });
+    wire('manDrop','manFile',(rows,name)=>{ manRows=rows; $('#manName').textContent=name; $('#manCount').textContent=rows.length; compare(); });
+
+    document.querySelectorAll('.stat').forEach(stat=>{ stat.addEventListener('click',()=>{ const f=stat.getAttribute('data-filter'); filterStatus=(filterStatus===f)?'الكل':f; render(); }); });
+    document.getElementById('q').addEventListener('input',render);
+    document.getElementById('dl').addEventListener('click',buildXLSX);
+  </script>
+</body>
+</html>
